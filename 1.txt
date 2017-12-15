@@ -1,0 +1,5 @@
+192.168.23.1|-|06/Dec/2017:15:06:19 +0800|GET /eshop/phone/iphone7.html HTTP/1.0|200|424|-|ApacheBench/2.3|-
+192.168.23.1|-|06/Dec/2017:15:06:19 +0800|GET /eshop/phone/iphone7.html HTTP/1.0|404|424|-|ApacheBench/2.3|-
+192.168.23.1|-|06/Dec/2017:15:06:19 +0800|GET /eshop/phone/iphone7.html HTTP/1.0|404|424|-|ApacheBench/2.3|-
+192.168.23.1|-|06/Dec/2017:15:06:19 +0800|GET /eshop/phone/iphone7.css HTTP/1.0|200|424|-|ApacheBench/2.3|-
+192.168.23.1|-|06/Dec/2017:15:06:19 +0800|GET /eshop/phone/huawei.html HTTP/1.0|200|424|-|ApacheBench/2.3|-
