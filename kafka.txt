@@ -1,0 +1,56 @@
+1.producer：
+　　消息生产者，发布消息到 kafka 集群的终端或服务。
+2.broker：
+　　kafka 集群中包含的服务器。
+3.topic：
+　　每条发布到 kafka 集群的消息属于的类别，即 kafka 是面向 topic 的。
+4.partition：
+　　partition 是物理上的概念，每个 topic 包含一个或多个 partition。kafka 分配的单位是 partition。
+5.consumer：
+　　从 kafka 集群中消费消息的终端或服务。
+6.Consumer group：
+　　high-level consumer API 中，每个 consumer 都属于一个 consumer group，每条消息只能被 consumer group 中的一个 Consumer 消费，但可以被多个 consumer group 消费。
+7.replica：
+　　partition 的副本，保障 partition 的高可用。
+8.leader：
+　　replica 中的一个角色， producer 和 consumer 只跟 leader 交互。
+9.follower：
+　　replica 中的一个角色，从 leader 中复制数据。
+10.controller：
+　　kafka 集群中的其中一个服务器，用来进行 leader election 以及 各种 failover。
+12.zookeeper：
+　　kafka 通过 zookeeper 来存储集群的 meta 信息。
+
+producer 写入消息序列图如下所示：https://www.cnblogs.com/xifenglou/p/7251112.html
+1. producer 先从 zookeeper 的 "/brokers/.../state" 节点找到该 partition 的 leader
+2. producer 将消息发送给该 leader
+3. leader 将消息写入本地 log
+4. followers 从 leader pull 消息，写入本地 log 后 leader 发送 ACK
+5. leader 收到所有 ISR 中的 replica 的 ACK 后，增加 HW（high watermark，最后 commit 的 offset） 并向 producer 发送 ACK
+
+创建topic
+1. controller 在 ZooKeeper 的 /brokers/topics 节点上注册 watcher，当 topic 被创建，则 controller 会通过 watch 得到该 topic 的 partition/replica 分配。
+2. controller从 /brokers/ids 读取当前所有可用的 broker 列表，对于 set_p 中的每一个 partition：
+	2.1 从分配给该 partition 的所有 replica（称为AR）中任选一个可用的 broker 作为新的 leader，并将AR设置为新的 ISR
+	2.2 将新的 leader 和 ISR 写入 /brokers/topics/[topic]/partitions/[partition]/state
+3. controller 通过 RPC 向相关的 broker 发送 LeaderAndISRRequest。
+
+删除topic
+1. controller 在 zooKeeper 的 /brokers/topics 节点上注册 watcher，当 topic 被删除，则 controller 会通过 watch 得到该 topic 的 partition/replica 分配。
+2. 若 delete.topic.enable=false，结束；否则 controller 注册在 /admin/delete_topics 上的 watch 被 fire，controller 通过回调向对应的 broker 发送 StopReplicaRequest。
+
+
+
+kafka HA
+replication
+	同一个 partition 可能会有多个 replica，而这时需要在这些 replica 之间选出一个 leader，
+	producer 和 consumer 只与这个 leader 交互，其它 replica 作为 follower 从 leader 中复制数据。
+
+leader failover
+	当 partition 对应的 leader 宕机时，需要从 follower 中选举出新 leader。在选举新leader时，
+	一个基本的原则是，新的 leader 必须拥有旧 leader commit 过的所有消息。
+
+
+
+
+
