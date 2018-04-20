@@ -1,0 +1,74 @@
+redis是一个分布式kv对的数据库。
+它支持多种类型的数据    string
+
+hashmap虽然速度快  但是受限制于每台机子的内存  redis是分布式的   负载均衡
+	Java容器单机内存直接读取，无网络开销，无须序列化等
+redis使用单核io复用    memcached采用多核   数据大于100k   memcached性能高
+redis支持持久化   rdb    快照  当符合某种规则时，会将内存中的数据全量生成一份副本存储到硬盘上
+		    根据配置规则进行自动快照；
+		    用户执行SAVE, BGSAVE命令；
+		    执行FLUSHALL命令；
+		    执行复制（replication）时。
+		      save 900 1  15分钟之内被更改键大于1
+		         SAVE命令：当执行SAVE命令时，Redis同步进行快照操作，期间会阻塞所有来自客户端的请求，所以放数据库数据较多时，应该避免使用该命令；
+			 BGSAVE命令： 从命令名字就能看出来，这个命令与SAVE命令的区别就在于该命令的快照操作是在后台异步进行的，进行快照操作的同时还能处理来自客户端的请求。执行BGSAVE命令后Redis会马上返回OK表示开始进行快照操作，如果想知道快照操作是否已经完成，可以使用LASTSAVE命令返回最近一次成功执行快照的时间，返回结果是一个Unix时间戳。
+		    FLUSHALL命令   清除数据库中的所有数
+		     快照执行的过程如下：
+			    Redis使用fork函数复制一份当前进程（父进程）的副本（子进程）；
+			    父进程继续处理来自客户端的请求，子进程开始将内存中的数据写入硬盘中的临时文件；
+			    当子进程写完所有的数据后，用该临时文件替换旧的RDB文件，至此，一次快照操作完成。
+
+		或者aof   append only file  AOF可以将Redis执行的每一条写命令追加到硬盘文件中
+分布式  3.0  哨兵模式 高可用
+
+Redis引入了批处理，管道（Pipelining），即客户端可以一次发送多个命令给服务器，无须等待服务器的
+返回，而服务器端则回将请求放入一个有序的管道中，在执行完成后，一次性将返回值发送回客户端。
+
+redis也支持发布/订阅（Pub/Sub）通信模式
+Reids的Pub/Sub与消息中间件相比，并不支持持久化，如系统宕机，网络问题等都会造成消息丢失；
+
+Reids以命令方式（MULTI, EXEC, DISCARD,WATCH  UNWATCH）提供了简单的类/伪事务支持，
+之所以称之为类/伪事务，是因为Redis的只保证了事务必须ACID的C（一致性），I（隔离性），
+并不保证A（原子性）与持久性（D），Redis事务甚至不支持回滚操作。
+
+Redis的事务提供了一种将多个命令打包并置入事务队列，之后批量一次性，有序的按照先进先出
+（FIFO）的顺序执行机制。事务在执行过程中不会被中断，所有命令命令执行之后，事务才结束。
+	MULTI开启一个事务
+	EXEC：执行这个事务内的所有命令
+	DISCARD：放弃事务，即该事务内的所有命令都将取消
+	WATCH：监控一个或者多个key,如果这些key在提交事务（EXEC）之前被其他用户修改过，那么事务将执行失败，需要重新获取最新数据重头操作（类似于乐观锁）。
+	UNWATCH：取消WATCH命令对多有key的监控，所有监控锁将会被取消。
+	https://blog.csdn.net/candy_rainbow/article/details/52810440
+	如果这个错误命令在入队的时候并没有报错，而是在执行的时候出错了，那么redis默认跳过这个命令执行后续命令。也就是说，redis只实现了部分事务。
+
+	set a 10
+	watch a 
+	multi 
+	incr a 10	decrby a 20
+	exec fail
+	
+Transaction v.s. Pipelining
+Redis的Transaction与Pipelining都是批量执行命令，其主要差别为：
+	Transaction则保证了一个client发起的事务中的命令可以连续的执行，中间不会插入其它client的命令，而此则受益于Redis的单线程模式，很容易实现。
+	
+	Pipelining主要是提供了网络层面的优化，客户端通过缓存多个命令并按批次发送给服务端处理以节省网络RTT（Round Trip TIme）时间开销，
+	但这些命令并不保证事务性（Redis的单线程保证了单个命令本身是原子的，但多个client可以发起多个命令串行执行）。
+
+	Transaction与Pipelining不但不冲突，对于批量命令甚至可以结合起来使用以达到网络优化及事务性保证双重收效。
+
+Redis支持Master/Slave主从配置，实现弱一致性，支持负载均衡，提高HA
+	master 读写   slave  读数据
+
+	Slave会定期给Master发送SYNC命令进行同步，如果第一次连接则进行全量同步否则增量同步。
+	Master则启动后台快找进程saving来收集最近修改数据集所有命令并将其用db file传输给Slave。
+
+
+Cluster中固定有16384个slot, 每个key通过CRC16校验后对16384取模来决定其对应slot的位置，而每个node
+负责一部分的slot管理，当node变化时，动态调整slot的分布，而数据则无须挪动。
+Redis Hash数据结构， Hash新创建时，在不影响效率情况下，Redis默认使用zipmap作为底层实现以节省空间，只有当size超出一定限制后
+（hash-max-zipmap-entries ），Redis才会自动把zipmap转换为下图Hash Table。
+
+整个哈希表的性能则依赖于它的大小size和它已经保存节点数量used的比率。
+比率在1:1时，哈希表的性能最好，如果节点数量比哈希表大小大很多的话，则整个哈希表就退化成多个链表，其性能优势全无。
+Ratio ＝ Used / Size
+强制rehash：ratio大于dict_force_resize_ratio（v 3.2.1版本为5）
