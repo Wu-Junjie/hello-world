@@ -1,0 +1,1386 @@
+hive：
+	数据仓库软件：反範式设计，允许甚至推荐数据冗余。
+
+	范式：第一范式：一个列只包含一个属性
+	      第二范式：非主键的属性严格依赖于主键
+	      第三范式：非主鍵的屬性不能依賴于其他非主鍵
+
+	OLAP：online analyze process
+	OLTP：online transaction process
+
+	RDBMS:relative database management system  关系型数据库
+	SQL:structure query language 结构化查询语言
+
+	A:atomic	原子性
+	C:consistent	一致性
+	I:isolation	隔离性
+	D:durable	持久性
+
+	commit
+	rollback
+
+	读锁
+	写锁
+
+Hive：hadoop上套的壳.
+
+MySQL:事务性transaction
+	A:atomic	原子性
+	C:consistent	一致性
+	I:isolation	隔离性
+	D:durable	持久性
+
+	commit
+	rollback
+
+	
+	
+并发现象：
+
+	脏读		//读未提交
+			//当B进行对数据库的操作，A进行读取，
+			//如果B将事务回滚，就造成了脏读
+
+	不可重复读	//读不回去
+			//A事务读取数据之后，B事务对数据进行update操作
+			//之后A再一次的读取数据，造成不可重复读
+
+	幻读		//读多了
+			//A事务读取数据之后，B事务对数据进行insert操作 
+			//之后A再一次的读取数据，造成幻读
+
+	
+事务隔离级别：
+	1、	1. read uncommitted	读未提交	造成脏读
+	2、	2. read committed	读已提交	防止脏读，造成不可重复读
+	3、	4. repeatable read	可重复读	可以防止不可重复读和幻读
+	4、	8. serializable		串行化		同一時刻，只允许一个事务进行写操作。
+
+
+	读未提交：
+	      A:
+		2、start transaction;
+		3、set session transaction isolation level read uncommitted;
+		4、select * from customers;
+		6、select * from customers;
+
+	      B：
+		1、set autocommit=0;
+		2、start transaction;
+		5、update customers set name='jerry' where id=1;
+		7、rollback
+
+		脏读
+		
+	
+	读已提交：
+		
+	      A：
+		1、start transaction;
+		3、set session transaction isolation level read committed;
+		4、select * from customers;
+		6、select * from customers;
+
+	      B:
+		1、start transaction;
+		2、set autocommit=1;
+		5、update customers set name='jerry' where id=1;
+
+		不可重复读
+
+		
+	可以重复读：repeatable read 能防止不可重复读，也能防止幻读
+		
+	      A：
+		1、start transaction;
+		3、set session transaction isolation level repeatable read
+		4、select * from customers;
+		6、select * from customers;
+
+	      B:
+		1、start transaction;
+		2、set autocommit=1;
+		5、update customers set name='jerry' where id=1;
+
+	串行化：
+		同一時刻，只允许一个事务进行写操作。
+
+	set [session|global] transaction isolation level read uncommitted
+
+
+ANSI：
+	mysql 默认级别是4
+
+	oracle没有4
+
+
+共享读锁
+独占写锁
+
+悲观锁
+	serializable：
+乐观锁
+	
+
+
+MVCC：多版本并发控制
+	multiple version concurrent control：
+
+
+hive：OLAP。一次写入，多次读取
+      并不是读写优化，insert慢
+      一般不支持事务性：行级更新，行级删除。
+
+
+hive安装：
+	1、tar -xzvf apache-hive-2.1.1-bin -C /soft
+	2、ln -s apache-hive-2.1.1-bin hive
+	3、sudo nano /etc/profile
+	4、source /etc/profile
+	5、hive --version
+
+配置文件(conf)
+	6、cp hive-env.sh.template hive-env.sh
+	7、nano hive-env.sh 
+		修改HADOOP_HOME=/soft/hadoop
+
+	8、cp hive-default.xml.template hive-site.ml
+	9、sed -i 's@${system:java.io.tmpdir}@/home/centos/hive@g' hive-site.xml
+	10、sed -i 's/${system:user.name}/centos/g' hive-site.xml
+	
+
+	11、初始化元数据
+		schematool -initSchema -dbType derby
+
+	12、hive
+
+注意点：1、初始化目录(metastore_db)在当前文件夹下，如果不删除，初始化会失败
+	2、运行hive的时候，要在metastore_db相同路径下。
+
+
+
+配置元数据库为mysql：
+	1、使用windows端的mysql
+		1、在/soft/hive/lib下拷贝mysql驱动
+		2、配置文件hive-site.xml
+			com.jdbc.mysql.Driver
+			jdbc:mysql://192.168.153.1:3306/hive?createDatabaseIfNotExist=true&amp;useSSL=false
+			root
+			root
+		
+		3、初始化数据库
+			schematool -initSchema -dbType mysql
+		
+		4、问题
+			mysql57版本权限验证问题：     55貌似也存在
+				grant all PRIVILEGES on *.* to root@'s201'  identified by 'root';
+
+			hive数据库已存在的问题
+				drop database hive;
+
+
+	2、使用linux端mysql（5.7）
+		1、sudo rpm -ivh mysql57-community-release-el7-9.noarch.rpm
+
+		2、sudo yum localinstall *.rpm
+
+		3、启动mysql服务
+			systemctl start mysqld
+		
+		4、将mysql服务设置为开机启动
+			systemctl enable mysqld
+
+		5、启动mysql
+			mysql -uroot -p
+		
+		6、发现没有密码的情况
+			grep password /var/log/mysqld.log,第一行末尾即生成的随机密码
+
+		7、通过此密码进入到mysql，修改mysql的root密码
+			mysql>SET PASSWORD = PASSWORD('IT18zhang?');
+			mysql>ALTER USER 'root'@'localhost' PASSWORD EXPIRE NEVER;
+			mysql>flush privileges;
+
+		5、mysql5.6版本默认没有密码
+
+
+hive的基本数据类型
+	integer：int bigint smallint tinyint
+	string： char varchar()
+	timestamp: YYYY-MM-DD HH:MM:SS.fffffffff
+	Dates:	{{YYYY-MM-DD}}
+	decimal: decimal(10,2)	xxxxxxxx.xx
+
+	组合类型
+	常量类型：
+
+
+hive基本操作：
+	创建数据库：create database myhive;
+	会在/user/hive/warehouse下创建文件夹myhive.db
+	
+	创建表：create table users(id int, name string, age int);
+	会在默认数据库下创建一个名为users的文件夹。
+
+	插入数据：insert into users(id,name,age) values(1,'tom',20);
+	生成MR作业
+	会在users文件夹下创建一个文件，叫做00000_0
+	默认以ctrl+A进行分割
+
+
+	CREATE TABLE IF NOT EXISTS t2 ( id int, name String, age int)
+	COMMENT ‘user details’
+	ROW FORMAT DELIMITED
+	FIELDS TERMINATED BY ‘\t’
+	LINES TERMINATED BY ‘\n’
+	STORED AS TEXTFILE;
+	创建表并指定字段分隔格式。行分隔格式
+	
+
+
+	删除数据操作：drop database myhive cascade(级联删除); 
+
+
+	在linux命令行使用hive语句操作
+
+	sql语句非常长的时候,需要使用脚本来运行hive命令
+		nano hive.hql
+		hive -f hive.hql  ===> 运行脚本
+
+	将数据load进入hive表中
+		load data [local] inpath file:///home/centos/1.txt into table t2;
+	
+
+	将数据加载到hive表中进行全排序：
+		select * from t2 order by id desc;
+	
+
+事务性：A
+	C
+	I
+	D
+
+	start transaction
+	commit
+
+
+	脏读
+	不可重复读
+	幻读
+
+	1、读未提交 read uncommitted
+	2、读已提交 read committed
+	4、可重复读 repeatable read
+	8、串行化   serializable
+
+
+hive：数据仓库，hiveQL
+      
+      数据库读写优化，数据仓库读优化
+
+
+rdbms	OLTP
+hive	OLAP, insert
+	load
+
+	load data local inpath 
+
+	create table t1(id int) row format delimited
+	fields terminated by '\t'
+	lines terminated by '\n'
+	stored as textfile;
+
+	hive -e '' 
+	     -f 1.hql
+
+
+	分析函数。
+
+
+hive查看帮助：
+	hive --help
+
+	hive --help --service cli == hive -H
+
+
+hive执行脚本
+	1、linux命令行执行操作
+		$> hive -f 1.hql
+	
+	2、hive 命令行执行操作
+		hive> source /home/centos/1.hql
+
+hive启动时候设置
+	hive -i 1.hql	会在程序启动的时候运行该命令(可以是设置隔离级别，可能是设置运行内存，可以是运行某一命令)
+
+
+hive历史记录：
+	存在于~/.hivehistory中
+	同样的，mysql历史记录也存在于~/.mysql_history
+
+在hive客户端运行linux命令
+	hive> ! cmd;
+
+
+在hive中查看HDFS文件系统
+	hive> dfs -ls / ;
+	使用hive端查看hdfs操作比linux端要快，是因为在linux端每次执行命令时候，都会重新开辟一段jvm空间
+	而hive是持久运行的，不需要额外开辟
+
+
+hive中的注释，和mysql一样，--
+
+	只能在脚本中使用
+
+开启表头显示：
+	set hive.cli.print.header=true;  //临时的
+	nano /hive-site.xml		 //永久的
+
+
+DDL：data define language(数据定义语言)
+	建库语句
+	  hive>create database [if not exists] t1;
+	建表语句：
+	  hive>	create table t1(id int) row format delimited
+		fields terminated by '\t'
+		lines terminated by '\n'
+		stored as textfile;
+
+	使用正则模糊匹配表或数据库
+		show databases like 'm*';
+		show tables like 't*';
+
+	创建表手动指定数据库的目录：
+		create database myhive location '/user/myhive'
+
+
+hive中数据库名称和数据库路径不是绝对对应。
+	数据库名称为myhive
+	数据库路径所指定的myhive.db可以选择任一可能的路径
+
+查看格式化表描述
+	desc formatted t1;
+
+托管表(内部表)和外部表
+	内部表MANAGED_TABLE，删除表之后，表内的数据均被删除
+		普通建表方式
+
+	外部表EXTERNAL_TABLE，删除表之后，数据仍存在，只不过rdbms中元数据被删除
+	hive>	create external table shop(id int) row format delimited
+		fields terminated by '\t'
+		lines terminated by '\n'
+		stored as textfile;
+
+	
+复制表的结构(行分隔符)
+	create table tt like ttt;
+	
+
+全表复制(不复制表的模式，只复制数据)
+	create  table tt as select * from ttt;
+
+
+指定数据库列出表名称
+	show tables in xxx;
+
+
+	province	city
+	北京		北京
+	山东		青岛
+	江苏		南通
+
+	分区：
+		数据库====> 表 ======> 分区 =====>
+
+创建表，指定分区
+	create table users(id int , name string , age int) partitioned by (province string , city string) row format delimited fields terminated by '\t' lines terminated by '\n' stored as textfile;
+
+在分区表中插入数据
+	insert into users partition (province='beijing',city='beijing') (id,name,age) values(1,'tom',20);
+	
+	对应的文件夹内容。
+	/user/hive/warehouse/users/province=beijing/city=beijing
+
+
+
+元数据内容：
+	数据库信息：DBS
+	表信息：TBLS
+	表路径信息：SDS
+	列信息：COLUMN_V2
+
+
+	1	tom	20	shandong	qingdao
+	2	tomas	30	jiangsu		nanjing
+	3	tomson	40	jiangsu		nantong
+	
+	create table users(id int , name string , age int, province string , city string) row format delimited fields terminated by '\t' lines terminated by '\n' stored as textfile;
+
+
+在分区表中插入数据，并动态建立分区
+	
+
+?select * from users cluster by id;
+?select * from users group by id，name，age,province,city;
+
+	
+
+修改表：
+	修改表名：alter table users rename to user0;
+	添加列：  alter table users add columns (id int, name string);
+	删除列：  不管用
+	修改对应的列： alter table users change id no string;
+	替换列：  alter table users replace cloumns ()
+
+修改表属性：
+	alter table user0 set tblproperties ('creators'='tangjie')
+
+
+向表中装载数据：
+	load data [local] inpath '/home/centos/1.txt' [overwrite] into table t1 [partition(province='shanghai', city='shanghai')];
+
+
+动态插入分区
+
+	1、准备id,name,age,province,city的未分区表，并在此load数据
+	2、创建分区表，以province,city作为分区
+	3、
+
+	关闭严格模式：默认以严格模式来执行，他要求至少含有一列分区字段是静态的
+	set hive.exec.dynamic.partition.mode=nonstrict
+	
+	开始插入数据：
+	insert [overwrite] into table users partition(p,c) select id,name,age,province,city from user1;
+
+	注意，数据末尾中的空格不能有。
+
+
+	动态插入分区，他会从最后n个字段来获取分区值
+
+
+导出数据方法：
+	1、hdfs dfs -get	
+	2、insert overwrite local directory '/home/centos/2.txt' select * from user1;
+
+
+	select id, * from users;
+
+
+分页查询：
+	取前五个
+	select * from users limit 5
+	从第六个开始，取前五个
+	select * from users limit 5，5
+
+嵌套查询：
+	select * from (select * from users where province='jiangsu') a where a.age>20;
+
+case...when...then...
+	select *, case when age<30 then 'young'
+	when age=30 then 'middle'
+	else 'old'
+	end from users;
+	重点在于逗号
+
+
+hive在join操作的时候是在map端还是reduce端进行聚合
+	
+	内连接
+	select a.name,a.age,a.city,b.location from users a join city b on a.province=b.province;
+	select a.name,a.age,a.city,b.location from users a, city b where a.province=b.province;
+
+	左外连接
+	select a.name,a.age,a.city,b.location from users a left outer join city b on a.province=b.province;
+	右外连接
+	select a.name,a.age,a.city,b.location from users a right outer join city b on a.province=b.province;
+	全外连接
+	select a.name,a.age,a.city,b.location from users a full outer join city b on a.province=b.province;
+
+	在join的时候，可能会多表联查，而hive的join操作是将最后的表作为最大表。会把小表加载到分布式缓存，然后进行处理
+	所以可以在select 的时候加入一个标记，证明哪个表是大表，一下说明标记a为大表
+	select /*+streamtable(a)*/ a.name,a.age,a.city,b.location from users a join city b on a.province=b.province;
+
+	所标记的表a为小表（适合于map端的join）
+	select /*+mapjoin(a)*/ a.name,a.age,a.city,b.location from users a join city b on a.province=b.province;
+
+hive端排序：
+	order by 
+	sort by
+
+
+distributed by：
+	将相同的key进行hash分区，分到相同的reduce中
+
+
+模糊匹配：
+	like：select *  from users where province like '%ang%';
+	rlike： select *  from users where province rlike '.*(jiangsu|beijing).*';
+
+
+
+
+parquet.	
+sequenceFile
+RCFile
+
+1/2 + 1/4 + 1/8 + ...........
+
+hive做wc
+
+
+hive 
+	create external table t1(id int) partitioned by (city string) row format delimited 
+	fields terminated by ...
+	lines terminated by ...
+	stored as textfile;
+
+	外部表，托管表/内部表
+
+	元数据	元数据+真实数据
+
+	分区表：
+		文件夹
+
+	insert into t1 partition (city='nantong') (id) values (2);
+
+	load data local inpath '' into t1 partition (city='nantong')
+
+map端join：优先使用
+	select /*+streamtable(b)*/a.id , a.name , b.orderno, b.price from customers a join orders b on a.id=b.cid ; 内连接 
+		/*+mapjoin(a)*/					...left outer join		左外连接			
+								...right outer join		右外连接
+								...full outer join		全外连接
+
+reduce端join：当表的size在25000000以上，使用reduce端join
+	
+
+group by	//和聚合函数一起使用 sum avg ....  select id,name,sum(price) group by id,name 
+
+
+sort by		部分排序	使用指定reduce个数
+order by	全排序		只使用一个reduce
+
+	验证方式：
+		hive> set mapred.reduce.tasks=2
+
+		insert overwrite local directory '/home/centos/sort' select * from users sort by age;
+		insert overwrite local directory '/home/centos/order' select * from users order by age;
+
+		
+distribute by	指定分区(hash分区)
+	insert overwrite local directory '/home/centos/distributes' select * from users distribute by id;
+
+
+distribute by 和 sort by 一起使用
+	insert overwrite local directory '/home/centos/order' select * from users distribute by id sort by age;
+
+cluster by
+	相当于distribute by + sort by 且字段一致
+
+
+hive可以自动识别string中的数字类型并进行相关计算
+
+	select 2*(cast age as int) from xxx
+
+hive的bucket(桶)
+	
+	将大数据集 分成多个分区，优化数据的查询
+
+	创建桶表
+		create table bucket2 (id int,name string ,age int ,province string,city string) 
+		clustered by (province) into 4 buckets
+		row format delimited
+		fields terminated by '\t';
+
+	 insert into bucket select * from user1;
+
+
+采样：
+		//随机采样数据：x是指定桶的个数，y是指定所有桶的个数
+		select * from bucket tablesample(bucket x out of y on rand()) s;
+		//x是指定桶号，y是指定所有桶的个数
+		select * from bucket tablesample(bucket x out of y on province) s;
+		
+		//取得总行数的百分比
+		select * from bucket2 tablesample(10 percent) s;
+		//取得前几行的数据
+		select * from bucket2 tablesample(1 rows) s;
+		//取得前几个字节的数据（B，K，M，G）
+		select * from bucket2 tablesample(50B) s;
+
+
+表联合
+	select a.id,a.name from users a union all select b.age,b.province from bucket b;
+
+视图view：
+	虚表，伪表。
+	create view customer_join as select a.id,a.name,b.orderno,b.price from customers a , orders b where a.id=b.cid;
+
+
+复杂类型：
+Michael	Montreal,Toronto	Male,30	DB:80	Product:Developer^DLead
+Will	Montreal	Male,35	Perl:85	Product:Lead,Test:Lead
+Shelley	New York	Female,27	Python:80	Test:Lead,COE:Architect
+Lucy	Vancouver	Female,57	Sales:89,HR:94	Sales:Lead
+
+
+struct:多种类型，多个字段	collection items terminated by ','
+array：相同类型，多个字段	collection items terminated by ','
+map：	key-value映射		map keys terminated by ':'
+字段和字段之间的分隔符		fields terminated by '\t'
+行分隔符			lines terminated by '\n'
+
+CREATE TABLE employee (name string, place ARRAY<string>, sex_age STRUCT<sex:string,age:int>, score MAP<string,int>, title MAP<string,string>)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY '\t'
+COLLECTION ITEMS TERMINATED BY ','
+MAP KEYS TERMINATED BY ':';
+
+name	place			sex_age				score			title
+-------------------------------------------------------------------------------------------------------------------------
+Michael ["Montreal","Toronto"]  {"sex":"Male","age":30}		{"DB":80}		{"Product":"Developer^DLead"}
+Will    ["Montreal"]		{"sex":"Male","age":35}		{"Perl":85}		{"Product":"Lead","Test":"Lead"}
+Shelley ["New York"]		{"sex":"Female","age":27}       {"Python":80}		{"Test":"Lead","COE":"Architect"}
+Lucy    ["Vancouver"]		{"sex":"Female","age":57}       {"Sales":89,"HR":94}    {"Sales":"Lead"}
+
+操纵，array格式的列
+	select select name,place[0] as p1 , place[1] as p2 from employee;
+
+操纵struct格式的列
+	select name, sex_age.sex , sex_age.age from employee;
+
+操纵map格式的列
+	select name, score['DB'] as db, score['Perl'] as perl, score['Python'] as python, score['Sales'] as sales, score['HR'] as HR from employee;
+
+
+
+对于嵌套类型，比如说上述表中的title字段
+
+使用Array嵌套Array，外部的分隔符是^B(\002),内部的array是^C(\003)
+Map嵌套Array，map的key之间分隔符是^C(\003)，内部Array之间的分隔符是^D(\004)
+
+
+数据库、表、列、分区、桶
+
+
+hive --service cli						//启动hive
+hive --service hiveserver2					//启动hiveserver2
+beeline -u jdbc:hive2://localhost:10000				//启动beeline
+
+hiveserver2：	beeline	客户端
+		jdbc	代码
+
+
+10000	hiveserver2端口
+10002	webui端口
+
+centos ----->	hive -----> hadoop
+	
+
+<!-- hadoop core-site.xml -->
+<property>
+	<name>hadoop.proxyuser.centos.groups</name>
+	<value>*</value>
+	<description>Allow the superuser centos to impersonate any members of the group group1 and group2</description>
+</property>
+<property>
+	<name>hadoop.proxyuser.centos.hosts</name>
+	<value>*</value>
+	<description>The superuser can connect only from host1 and host2 to impersonate a user</description>
+</property>
+
+通过jdbc进行hive编程
+-------------------------------------------------
+<dependency>
+	<groupId>org.apache.hive</groupId>
+	<artifactId>hive-jdbc</artifactId>
+	<version>2.1.1</version>
+</dependency>
+
+
+public class App {
+	public static void main(String[] args) {
+		try {
+			Class.forName("org.apache.hive.jdbc.HiveDriver");
+			Connection conn = DriverManager.getConnection("jdbc:hive2://s201:10000/myhive");
+			Statement st = conn.createStatement();
+			st.execute("create table t3(id int,name string, age int)");
+			st.close();
+			System.out.println("ok");
+			
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+}
+
+<property>
+    <name>hive.server2.thrift.client.user</name>
+    <value>centos</value>
+    <description>Username to use against thrift client</description>
+  </property>
+  <property>
+    <name>hive.server2.thrift.client.password</name>
+    <value>centos</value>
+    <description>Password to use against thrift client</description>
+  </property>
+
+
+  索引：优化查询
+	折半查找
+
+	
+	1、compact
+	CREATE INDEX users_index ON TABLE users (id) AS 'COMPACT' WITH DEFERRED REBUILD;
+	2、bitmap
+	CREATE INDEX users_index ON TABLE users (id) AS 'BITMAP' WITH DEFERRED REBUILD;
+
+	重建索引
+		ALTER INDEX u ON id REBUILD ;  ?
+	删除索引
+		DROP INDEX u ON id            √
+
+	显示索引：
+		show formatted index on users;
+
+
+  在hive中使用压缩：中间产生数据的压缩。
+	SET hive.exec.compress.intermediate=true
+	SET hive.intermediate.compression.codec=org.apache.hadoop.io.compress.SnappyCodec
+
+	对于hive输出文件进行压缩
+	set hive.exec.compress.output=true
+	set mapred.map.output.compression.codec=org.apache.hadoop.io.compress.GzipCodec
+
+
+	
+.hiverc文件
+	在家目录~
+		创建名为.hiverc的文件，编辑内容
+		每次hive启动时候都会执行此文件
+
+
+hive存储格式：
+
+
+sort by
+order by
+distribute by ====> hash partition
+cluster by =======> sort by + distributed by ()
+
+bucket:
+	解决分区文件夹数量特别大。
+	join a.id=b.cid
+
+
+采样：
+	n out of s on rand()
+	n out of s on province
+	
+视图：伪表
+
+复杂类型：
+	array
+	struct
+	map
+
+beeline
+hiveserver2
+
+jdbc
+
+索引：折半查找，优化查询
+
+压缩：textfile
+
+      gzip、bzip2、lzo、lz4、snappy。
+
+
+      节省空间，消耗cpu，
+      产生中间文件使用压缩：
+				SET hive.exec.compress.intermediate=true
+				SET hive.intermediate.compression.codec=org.apache.hadoop.io.compress.SnappyCodec
+
+      对于结果文件使用压缩：
+				SET hive.exec.compress.output=true
+				SET mapred.output.compression.codec=org.apache.hadoop.io.compress.SnappyCodec
+
+
+复杂类型：array
+---------------------------------------------------
+id name hobby['music','football']
+
+create table arraytest (id int, name string , hobby array<string> )
+row format delimited 
+fields terminated by '\t'
+collection items terminated by ','
+lines terminated by '\n'
+stored as textfile;
+
+insert into arraytest select 7 ,'tom7',array('xxx','xxx');
+
+array之间的嵌套：
+-------------------------------------------------
+create table arraytest2 (id int, name string , relation array<array<string>> )
+row format delimited 
+fields terminated by '\t'
+collection items terminated by ','
+map keys terminated by ':'
+lines terminated by '\n'
+stored as textfile;
+
+tom1:tomas1,tomson2:tomasLee2,tom3:tomas3:tomasLee3
+
+复杂类型：map
+-----------------------------------------------------
+map中单个元素设置：
+create table maptest (id int, name string , score map<string,int> )
+row format delimited 
+fields terminated by '\t'
+map keys terminated by ':'
+lines terminated by '\n'
+stored as textfile;
+
+insert into maptest2 select 8 ,'tom8',map('physics',30);
+
+使用Array嵌套Array，外部的分隔符是^B(\002),内部的array是^C(\003)
+Map嵌套Array，map的key之间分隔符是^C(\003)，内部Array之间的分隔符是^D(\004)
+
+map中多个元素设置
+create table maptest2 (id int, name string , score map<string,int> )
+row format delimited 
+fields terminated by '\t'
+collection items terminated by ','
+map keys terminated by ':'
+lines terminated by '\n'
+stored as textfile;
+
+insert into maptest2 select 8 ,'tom8',map('physics',30,'xxx',10);
+
+select name, score['physics'],score['xxx'],score['math'],score['chinese'] from maptest2;
+
+
+
+复杂类型struct结构体：<'age':int,'sex':string>
+------------------------------------------------------------
+create table structtest (id int, name string , age_sex struct<age:int,sex:string>)
+row format delimited 
+fields terminated by '\t'
+collection items terminated by ','
+map keys terminated by ':'
+lines terminated by '\n'
+stored as textfile;
+
+select name, age_sex.sex from structtest;
+
+不能insert
+
+
+
+hive：默认优化机制。
+----------------------------------
+	性能方面的考虑
+
+性能工具：
+	explain:分析并阐述各个MR阶段的数据处理过程
+	explain select count(*) from users;
+	explain select pass , count(*) count from duowan group by pass order by count desc limit 20;
+
+	analyze:使用CBO(Cost-Based Optimizer)来取得表查询的最大效率。
+	表分析：	analyze table duowan compute statistics
+	分区表分析:	analyze TABLE duowan partition(year=2014, month=12) compute statistics;
+	列分析：	analyze table duowan compute statistics FOR COLUMNS employee_id;
+
+duowan用户数据处理：
+	create table duowan (id int, name string, pass string, email string , nickname string)
+	row format delimited
+	fields terminated by '\t'
+	lines terminated by '\n'
+	stored as textfile;
+
+	select pass , count(*) count from duowan group by pass order by count desc limit 20;
+	2分24秒
+
+hive的日志
+	/soft/hive/conf/hive-log4j2.properties
+	property.hive.log.dir = /soft/hive/logs/centos
+
+
+分区表的建议：
+	使用日期和时间进行分区
+
+	使用地域进行分区
+
+	使用业务逻辑来进行分区
+
+
+
+hive的多种数据存储类型
+-----------------------------------------------
+基于行的存储格式：
+
+	TEXTFILE：文本文件
+		hive的默认存储. 数据没有压缩，可以被压缩编解码器所压缩(hadoop支持)
+		然而，不可压缩的编解码器在处理文件的时候，会成为一个超大map，影响分布式性能
+
+	SEQUENCEFILE：序列文件
+		基于K-V的二进制存储格式. 特点是紧凑并且适应MR的输入输出格式
+		seqFile可以支持三种压缩机制，不压缩、记录压缩、块压缩
+		可以通过如下设置开启seqFile的压缩，一个块为1M
+
+		SET hive.exec.compress.output=true;
+		SET io.seqfile.compression.type=BLOCK;
+
+
+基于列的存储格式：
+
+	RCFILE：列级存储文件
+		是二进制扁平化文件、包含K-V，和seqFile比较相似
+		切割数据以一种行组的方式水平切割数据。一组或多组文件被存储在hdfs中
+		接着RCFile以列级格式(第一列，第二列等等)保存行组
+		这种存储方式允许hive跳过不相关的区域。
+		一个块4M
+
+	ORC：
+		这是个优化行列的捷径。是RCFile的升级，默认256M一块，
+		减少在运算过程中namenode的负载，不同于RCFille的通过元数据获取数据类型
+		ORC通过特定的编码来了解数据的类型。可以通过不同的方式优化压缩。
+		ORC以一种轻量级索引的方式存储了基本统计信息，比如最大，最小，和，计数
+		这个索引还用来在查询的时候跳过无关的行块。
+
+	PARQUET：
+		是一种和ORC类似的列级存储格式，然而parquet比orc支持更多的hadoop生态圈的组件
+		orc仅支持hive和pig。Parquet是google Dremel的一个开源实现，用来支持数据的嵌套结构
+
+parquet和ORC文件的比较：
+---------------------------------------------------------
+	parquet:		ORC:	
+	apache顶级项目		apache顶级项目
+	支持嵌套式结构		嵌套式结构支持的不好
+	不支持事务性ACID	支持事务性update
+	不支持update、delete	支持
+	性能稍差		性能稍好
+	hadoop生态圈支持范围广	只有hive和pig支持
+
+
+textfile	
+	create table text(id int,name string,age int,province string,city string)
+	row format delimited
+	fields terminated by '\t'
+	lines terminated by '\n'
+	stored as textfile;
+
+seqFile
+	SET hive.exec.compress.output=true;   
+	SET io.seqfile.compression.type=BLOCK;
+	create table seq(id int,name string,age int,province string,city string)
+	stored as sequencefile;
+
+ORCFile	
+	create table orc(id int,name string,age int,province string,city string)
+	stored as ORC tblproperties('orc.compress'='snappy');
+
+parquet
+	create table parquet(id int,name string,age int,province string,city string)
+	stored as parquet tblproperties('parquet.compress'='snappy');
+
+对比四個存储格式的速度:
+====================================================================
+select province, avg(age) age from text group by province;	44.336s
+select province, avg(age) age from seq group by province;	36.152s
+select province, avg(age) age from orc group by province;	32.143s
+select province, avg(age) age from parquet group by province;	54.599s
+
+
+
+对于小文件的处理：
+----------------------------------------------------------------
+	1、set hive.merge.mapfiles=true	//对于仅map端输出小文件的合并，默认为true
+	2、set hive.merge.mapredfiles=true	//对于MR输出小文件的合并，默认为false，需要设置为true
+	3、set hive.merge.size.per.task=?	//定义被合并后文件的大小，默认为256,000,000字节数
+	4、set hive.merge.smallfiles.avgsize=	//在指定文件大小以下被合并的阈值，默认为16,000,000字节数
+	
+	当1、2设置为true且文件大小在4之下，hive会另外调用一个map任务来处理小文件的问题
+
+
+serde：
+	serialize & deserialize
+
+
+	input					反序列化
+	
+	insert ====> output =====> hdfs		序列化
+
+
+csv文件		,	textfile
+json文件	
+
+			parquet 
+			
+			
+			orc
+
+在创建表的时候，通过指定serde来声明文件的序列化和反序列化
+	
+	读取csv文件通过serde
+	create table ttt(c10 string,c11 string,c12 string,c13 string,c14 string) 
+	row format serde 'org.apache.hadoop.hive.serde2.OpenCSVSerde' stored as textfile ;
+
+	
+	
+	读取json文件通过serde
+		1、将jar放入hive的lib文件夹下
+		2、建表
+		create table json( `_location` string, `_ip` string, `_action` string,`_uid` string, `_timestamp` string) 
+		row format serde 'org.openx.data.jsonserde.JsonSerDe' stored as textfile;
+		3、将json文件，注意json文件中，单条记录不能换行
+		4、load命令将其加载到表中
+		5、注意，json的字段要和hive字段严格对应
+		
+
+beeline本地模式
+	
+	1、连接到hive2://
+		$> beeline -u jdbc:hive2://
+		beeline> !connect jdbc:hive2://
+
+		开启本地模式，并不需要hiveserver2作为支撑。原因在于10000端口
+
+	2、设置配置文件
+		1)SET hive.exec.mode.local.auto=true;		//设置自动进入本地模式
+		2)SET hive.exec.mode.local.auto.inputbytes.max=50000000;
+		3)SET hive.exec.mode.local.auto.input.files.max=5;
+
+	3、运行本地模式必须满足一下情形
+		全部文件大小需要比2)小
+		全部map个数需要小于3)
+		reduce个数需要为1或0
+
+
+jvm重用机制：
+	当hive处理大量小文件的时候，会在NM上启动jvm虚拟内存来执行操作
+	执行完成之后便会释放资源，下一个任务来临之时会重新开启一块jvm内存
+	所以当大量的小任务来临之时，需要启动jvm重用机制来使得这些任务使用同一块jvm内存
+
+	SET mapred.job.reuse.jvm.num.tasks=5;	//超过五个的时候开启jvm重用机制
+						//也可以将其设置为-1，这样使得每个任务都使用一块jvm内存
+
+并发执行：
+	当两个job不相互依赖，此时可以设置并行机制，使得两个job同时运行，默认是关闭的
+
+	多玩密码统计：
+		stage1：wc
+		    ^	
+		    |
+		    |
+		    |
+		stage2：limit
+
+
+	SET hive.exec.parallel=true;		//默认false
+	SET hive.exec.parallel.thread.number=16;//并发线程数，默认为8
+
+
+Map端的join调参：
+	SET hive.auto.convert.join=true;			//默认是false
+	SET hive.mapjoin.smalltable.filesize=600,000,000;	//默认25M
+	
+	SET hive.auto.convert.join.noconditionaltask=true;	//默认false. 设置为true说明不需要暗示(/*+mapjoin(a)*/)
+	SET hive.auto.convert.join.noconditionaltask.size=10000000;//控制表大小来适应内存
+
+
+桶表的join调参：
+	SET hive.auto.convert.join=true;	//default false
+	SET hive.optimize.bucketmapjoin=true;	//default false
+
+
+
+分区表的建议：
+	使用日期和时间进行分区
+
+	使用地域进行分区
+
+	使用业务逻辑来进行分区
+
+分桶表的建议：
+	作为分桶key一定是热点数据	pass
+
+-hive的性能优化：
+	存储优化
+		中间文件压缩
+		输出文件压缩
+
+		存储格式：
+			行级存储：
+				textfile
+				sequencefile
+			列级存储
+				orcfile	//存储高效
+				parquet	//差强人意
+					//支持多种平台
+					//对嵌套格式支持优秀
+
+		
+		serde：
+			serialize deserialize
+
+		row format serde('') stored as textfile
+		
+		JsonSerDe
+			table字段要与json的key相对应
+
+
+	join优化
+		
+		暗示：
+		join
+
+	并行机制，jvm重用
+
+
+sum count avg	//聚合函数    多行变单行
+		//普通函数    行数不变
+explode		//表生成函数  单行变多行
+
+
+表生成函数：explode
+	select explode(array('tt','ttt'))
+
+
+
+1、单词统计
+	1、create table wc(line array<string>) row format delimited
+	   collection items terminated by ' '
+	   stored as textfile;
+
+	2、load data local inpath 'wc.txt' into table wc;
+
+	3、select explode(line) from wc;
+
+	4、select word, count(*) as count  from (select explode(line) word from wc) words group by word;
+	  
+
+2、最高气温统计		从1开始 不是0
+	substring('hello', 3)		//llo
+	substring('hello', 3,2)		//ll
+
+	1、获取年份    
+		select substring(line,16,4) as year from temp limit 1;
+
+	2、获取气温int
+		select cast(substring(line,88,5) as int) as t from temp limit 2;
+
+·	3、获取quality值
+		select substring(line,93,1) as q from temp limit 10;
+
+	4、将where子句完成
+		where t != 9999 and q rlike '[01459]'
+
+
+	5、拼串
+		select a.year, max(a.t) as tem from (select substring(line,16,4) as year , cast(substring(line,88,5) as int) as t 
+		from temp where cast(substring(line,88,5) as int) != 9999 and substring(line,93,1) rlike '[01459]') as a 
+		group by a.year order by tem; 
+
+3、对比mysql和hive对于duowan用户数据的处理速度
+	对密码统计的效率做对比
+	select pass, count(*) c from duowan group by pass order by c desc limit 20;
+	select pass,count(*) c from duowan group by pass order by c desc limit 20;
+	hive：299.667 s
+	mysql：15m55s
+
+
+
+4、分析函数
+	
+	over() //窗口函数、开窗
+	
+	此年龄段，比我大十岁的，比我小十岁的区间内进行年龄相加。
+
+sum,avg,min,max
+------------------------------------------			
+	select name, age ,sum(age)over(order by age range between 10 preceding and 10 following) from users;
+	
+	
+	定义窗口的浮动范围
+	--------------------------------------------------
+	[range between 10 preceding and 10 following]	//数值范围
+
+	[rows between 1 preceding and 1 following]	//行范围
+
+	[rows between current row and 1 following]	//行范围
+
+
+rank()  dense_rank()  row_number()   只有这个无参
+-----------------------------------------------------
+	按照年龄进行排名
+----
+	//并列跳跃 113
+	select name,province,age, rank() over(partition by province order by age desc) from users;
+
+	//不跳跃   112
+	select name,province,age, dense_rank() over(partition by province order by age desc) from users;
+	
+	//顺序	   123
+	select name,province,age, row_number() over(partition by province order by age desc) from users;
+
+
+ntile(n)	//将分组数据按照顺序切分成n片，返回当前的切片值
+----------------------------------------------------------------------
+	//分为三六九等
+	select name,age,province,ntile(3) over(partition by province order by age desc) from users;
+
+
+
+first_value(取第一个值) 值
+------------------------------------------
+	select name, age , province, first_value(age) over(partition by province order by age desc) high from users 
+	where province in ('beijing','jiangsu')
+
+	******取得江苏和北京年龄最大和最小的年龄和名字******
+	select name, age,province,first_value(age) over(partition by province order by age desc) high,first_value(age) over(partition by province order by age) low
+	from users where province in ('beijing','jiangsu');
+
+
+使用最少
+lag	//下沉n行，
+lead	//上浮n行，	
+-----------------------------------------------------
+	select name,age,province,lag(age) over(partition by province order by age) from users;
+	select name,age,province,lag(age,2,0) over(partition by province order by age) from users;
+			2为下沉	默认1	   null部分以0填充;
+	
+grouping sets,	grouping__id
+-----------------------------------------------------
+	pv:page view		页面数
+	uv:user view		用户数
+	
+	select month,day,count(distinct id) as uv from pv group by month,day;
+	+----------+-------------+-----+--+
+	|  month   |     day     | uv  |
+	+----------+-------------+-----+--+
+	| 2015-03  | 2015-03-10  | 4   |
+	| 2015-03  | 2015-03-12  | 1   |
+	| 2015-04  | 2015-04-12  | 2   |
+	| 2015-04  | 2015-04-13  | 3   |
+	| 2015-04  | 2015-04-15  | 2   |
+	| 2015-04  | 2015-04-16  | 2   |
+	+----------+-------------+-----+--+
+
+	select month,day,count(distinct id) as uv, grouping__id from pv 
+	group by month,day grouping sets(month,day) order by grouping__id;
+	+----------+-------------+-----+---------------+--+
+	|  month   |     day     | uv  | grouping__id  |
+	+----------+-------------+-----+---------------+--+
+	| 2015-04  | NULL        | 6   | 1             |
+	| 2015-03  | NULL        | 5   | 1             |
+	| NULL     | 2015-04-16  | 2   | 2             |
+	| NULL     | 2015-04-15  | 2   | 2             |
+	| NULL     | 2015-04-13  | 3   | 2             |
+	| NULL     | 2015-04-12  | 2   | 2             |
+	| NULL     | 2015-03-12  | 1   | 2             |
+	| NULL     | 2015-03-10  | 4   | 2             |
+	+----------+-------------+-----+---------------+--+
+
+cube:魔方
+-------------------------------------------------------
+	select month,day,count(distinct id) as uv, grouping__id from pv group by month,day with cube order by grouping__id;
+	n^2种组合
+	select null,null,count(distinct id) as uv from pv 
+	select month,null,count(distinct id) as uv from pv group by month
+	select null,day,count(distinct id) as uv from pv group by day
+	select month,day,count(distinct id) as uv from pv group by month,day
+	+----------+-------------+-----+---------------+--+
+	|  month   |     day     | c2  | grouping__id  |
+	+----------+-------------+-----+---------------+--+
+	| NULL     | NULL        | 7   | 0             |
+	| 2015-03  | NULL        | 5   | 1             |
+	| 2015-04  | NULL        | 6   | 1             |
+	| NULL     | 2015-04-16  | 2   | 2             |
+	| NULL     | 2015-04-15  | 2   | 2             |
+	| NULL     | 2015-04-13  | 3   | 2             |
+	| NULL     | 2015-04-12  | 2   | 2             |
+	| NULL     | 2015-03-12  | 1   | 2             |
+	| NULL     | 2015-03-10  | 4   | 2             |
+	| 2015-04  | 2015-04-12  | 2   | 3             |
+	| 2015-04  | 2015-04-16  | 2   | 3             |
+	| 2015-03  | 2015-03-12  | 1   | 3             |
+	| 2015-03  | 2015-03-10  | 4   | 3             |
+	| 2015-04  | 2015-04-15  | 2   | 3             |
+	| 2015-04  | 2015-04-13  | 3   | 3             |
+	+----------+-------------+-----+---------------+--+
+
+
+rollup
+------------------------------------------------------------
+	select month,day,count(distinct id) as uv, grouping__id from pv group by month,day with rollup order by grouping__id;
+										day,month   会改变结果
+										null null 
+										null day
+										month day
+	select null,null,count(distinct id) as uv from pv 
+	select month,null,count(distinct id) as uv from pv group by month
+	select month,day,count(distinct id) as uv from pv group by month,day
+	+----------+-------------+-----+---------------+--+
+	|  month   |     day     | c2  | grouping__id  |
+	+----------+-------------+-----+---------------+--+
+	| NULL     | NULL        | 7   | 0             |
+	| 2015-04  | NULL        | 6   | 1             |
+	| 2015-03  | NULL        | 5   | 1             |
+	| 2015-04  | 2015-04-16  | 2   | 3             |
+	| 2015-04  | 2015-04-15  | 2   | 3             |
+	| 2015-04  | 2015-04-13  | 3   | 3             |
+	| 2015-04  | 2015-04-12  | 2   | 3             |
+	| 2015-03  | 2015-03-12  | 1   | 3             |
+	| 2015-03  | 2015-03-10  | 4   | 3             |
+	+----------+-------------+-----+---------------+--+
+
+
+重点：
+	1、调参			//实战用的多，面试少
+	2、分析函数(sql)	//实战+面试
+	3、元数据库，处理引擎(将SQL翻译成MR作业)，执行引擎(执行作业)，存储(hdfs)
+
+rank() dense_rank() row_number() first_value() grouping sets() grouping__id 
+
+
+
+join的数据倾斜处理
+
+	SET hive.optimize.skewjoin=true;  //如果发生数据倾斜，将其设置为true
+	SET hive.skewjoin.key=100000;	  //默认值，如果使用这个参数，map端输出的key超过这个阈值，
+					  //新产生的key会发送到没有使用的reduce中。
+
+
+group by 数据倾斜处理
+	SET hive.groupby.skewindata=true; //当group by发生数据倾斜的时候，将其设置为true。
+	
+	如果设置以上参数，job会启用另外一个MR作业，将第一个map任务进行随机分区，进行二次作业
+
+	重新设计key
+	自定义分区函数：random
+
+hive的事务性
+	1、orc文件
+		create table user_txn (id int, name string, age int, province string, city string) 
+		clustered by (province) into 2 buckets row format delimited fields terminated by '\t' stored as orc 
+		TBLPROPERTIES('transactional'='true'); 
+	2、桶表
+		
+	3、配置文件
+		SET hive.support.concurrency = true;
+		SET hive.enforce.bucketing = true;
+		SET hive.exec.dynamic.partition.mode = nonstrict;
+		SET hive.txn.manager = org.apache.hadoop.hive.ql.lockmgr.DbTxnManager;
+		SET hive.compactor.initiator.on = true;
+		SET hive.compactor.worker.threads = 1;
+	
+	4、插入数据
+		insert into user_txn select * from users;
+
+	
+
+hive的UDF、UDAF、UDTF
+	
+	
+	
